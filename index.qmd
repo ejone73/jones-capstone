@@ -1,8 +1,203 @@
 ---
-title: "cap"
+title: "insert here"
+subtitle: "insert here"
 author: "Ember Jones"
-format: html
+format: 
+  html: 
+    tbl-cap-location: bottom
 ---
+DO I NEED TO ADD INSTALL.PACKAGES("") ???
 
-first commit test 123
-git 
+```{r, libraries}
+#| output: FALSE
+#| warning: FALSE
+#| message: FALSE
+
+library(tidyverse)
+library(readxl)
+library(gt)
+library(ggplot2)
+library(performance)
+library(broom)
+library(janitor)
+library(psych)
+```
+
+```{r, import data}
+#| output: FALSE
+#| include: FALSE 
+#| message: FALSE
+
+df.og <- read_csv("./Cognitive_Performance_Comprehensive.csv")
+```
+
+```{r, clean data}
+#| output: FALSE
+#| warning: FALSE
+#| message: FALSE
+
+# Standardize ID
+df <- df.og |>
+  mutate(ID = case_when(BirdID == "BlueBlack" ~ 1,
+                   BirdID == "BlueBrown" ~ 2,
+                   BirdID == "BlueGreen" ~ 3,
+                   BirdID == "BlueGrey" ~ 4,
+                   BirdID == "BlueLightBlue" ~ 5,
+                   BirdID == "BlueOrange" ~ 6,
+                   BirdID == "BlueRed" ~ 7,
+                   BirdID == "BlueWhite" ~ 8,
+                   BirdID == "BlueYellow" ~ 9,
+                   BirdID == "GreenBlue" ~ 10,
+                   BirdID == "GreenGrey" ~ 11,
+                   BirdID == "GreenOrange" ~ 12,
+                   BirdID == "GreenRed" ~ 13,
+                   BirdID == "GreenWhite" ~ 14,
+                   BirdID == "GreenYellow" ~ 15,
+                   BirdID == "LightBlueBlue" ~ 16,
+                   BirdID == "LightBlueBrown" ~ 17,
+                   BirdID == "LightBlueGreen" ~ 18,
+                   BirdID == "LightBlueRed" ~ 19,
+                   BirdID == "LightBlueWhite" ~ 20,
+                   BirdID == "LightBlueYellow" ~ 21,
+                   BirdID == "YellowGrey" ~ 22)) |>
+  relocate(ID, .before = BirdID) |>
+  select(-BirdID) |>
+  relocate(TrialType, .after = TrialDay) |>
+  relocate(TrialDay, .after = ID) |>
+  
+# Fix trial num
+  mutate(TrialNumTot = case_when(
+    TrialDay == 1 & TrialNum == 1 ~ 1,
+    TrialDay == 1 & TrialNum == 2 ~ 2,
+    TrialDay == 1 & TrialNum == 3 ~ 3,
+    TrialDay == 1 & TrialNum == 4 ~ 4,
+    TrialDay == 1 & TrialNum == 5 ~ 5,
+    TrialDay == 2 & TrialNum == 1 ~ 6,
+    TrialDay == 2 & TrialNum == 2 ~ 7,
+    TrialDay == 2 & TrialNum == 3 ~ 8,
+    TrialDay == 2 & TrialNum == 4 ~ 9,
+    TrialDay == 2 & TrialNum == 5 ~ 10,
+    TrialDay == 3 & TrialNum == 1 ~ 11,
+    TrialDay == 3 & TrialNum == 2 ~ 12,
+    TrialDay == 3 & TrialNum == 3 ~ 13,
+    TrialDay == 3 & TrialNum == 4 ~ 14,
+    TrialDay == 3 & TrialNum == 5 ~ 15)) |>
+  relocate(TrialNumTot, .before = TrialNum)
+```
+
+```{r, separate trial types}
+#| output: FALSE
+#| warning: FALSE
+#| message: FALSE
+
+splm.df <- df |>
+  filter(TrialType == "SPL&M") 
+rl.df <- df |>
+  filter(TrialType == "RL")
+```
+
+```{r, SPLM, num errors PER TRIAL}
+
+#### Table ####
+
+# Build statistics df
+stat.trial.error.splm.df <- splm.df |>
+  group_by(TrialNumTot) |>
+  summarize(
+    N = n(), 
+    Mean = mean(NumError), 
+    Min = min(NumError),
+    Median = median(NumError),
+    Max = max(NumError),
+    Range = Max - Min,
+    SD = sd(NumError),
+    SE = SD / sqrt(N)) |>
+  rename(`Trial #` = TrialNumTot) |>
+  mutate(across(c(Mean, SD, SE), ~ round(.x, 2))) |>
+  select(-N, -Min, -Max)
+
+# Build gt
+stat.trial.error.splm.gt <- stat.trial.error.splm.df |>
+  gt() |>
+  tab_header(title = "Descriptive statistics for number of errors per trial",
+             subtitle = "for spatial learning & memory") |>
+  tab_caption(caption = "CAPTION HERE") |>
+  tab_options(
+    table_body.vlines.style = "none",
+    table_body.hlines.style = "none",
+    table.border.top.width = px(0),
+    column_labels.vlines.style = "none",
+    row.striping.include_table_body = FALSE)
+stat.trial.error.splm.gt
+
+#### Visual ####
+
+# Calculate average # errors per trial
+splm.avgerror.pertrial <- splm.df |>
+  group_by(TrialNumTot) |>
+  summarize(MeanError = mean(NumError))
+
+# Build ggplot
+splm.trial.error.gg <- ggplot() +
+  ## Geoms
+  geom_col(
+    data = splm.avgerror.pertrial,
+    aes(x = TrialNumTot, y = MeanError, colour = "Average"),
+    fill = "coral",
+    linewidth = 0.5) +
+  geom_point(
+    data = splm.df,
+    aes(x = TrialNumTot, y = NumError, colour = "Observations"),
+    position = "jitter") +
+  geom_smooth(
+    data = splm.df,
+    aes(x = TrialNumTot, y = NumError, colour = "Trendline"),
+    method = "loess",
+    linewidth = 0.5,
+    se = FALSE,
+    fullrange = TRUE) + 
+  ## Theme & legend
+    theme_classic() +
+  scale_colour_manual(
+    name = NULL, 
+    values = c(
+      "Average" = "coral",
+      "Observations" = "deepskyblue3",
+      "Trendline" = "darkslategrey")) +
+    theme(
+    legend.position = c(0.9, 0.8)) +
+  ## Axes/scales
+  coord_cartesian(
+    xlim = c(0.5, 15.5),
+    ylim = c(0, 30),
+    expand = FALSE) + 
+  scale_x_continuous(
+    breaks = 1:15) +
+  scale_y_continuous(
+    breaks = seq(0, 30, by = 5)) +
+  ## Axes
+  labs(
+    x = "Trial number",
+    y = "Number of errors",
+    caption = "CAPTION HERE") +
+  ggtitle("Number of Errors per Trial",
+          subtitle = "on the Spatial Learning & Memory Task") +
+  ## Annotations
+  geom_vline(
+    xintercept = c(5.5, 10.5),
+    colour = "grey") +
+  annotate("segment",
+           x = c(1.5, 2.5, 3.5, 4.5, 6.5, 7.5, 8.5, 9.5, 11.5, 12.5, 13.5, 14.5), 
+           xend = c(1.5, 2.5, 3.5, 4.5, 6.5, 7.5, 8.5, 9.5, 11.5, 12.5, 13.5, 14.5),
+           y = c(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0), 
+           yend = c(25, 25, 25, 25, 25, 25, 25, 25, 17.5, 17.5, 17.5, 17.5),
+           colour = "lightgrey",
+           linetype = "dashed") +
+  annotate("text", x = 3, y = 29.5, label = "Day 1") +
+  annotate("text", x = 8, y = 29.5, label = "Day 2") +
+  annotate("text", x = 13, y = 29.5, label = "Day 3")
+splm.trial.error.gg
+```
+
+
+
