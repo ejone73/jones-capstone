@@ -21,6 +21,7 @@ library(performance)
 library(broom)
 library(janitor)
 library(psych)
+library(patchwork)
 ```
 
 ```{r, import data}
@@ -28,7 +29,7 @@ library(psych)
 #| include: FALSE 
 #| message: FALSE
 
-df.og <- read_csv("./Cognitive_Performance_Comprehensive.csv")
+df <- read_csv("./Cognitive_Performance_Comprehensive.csv")
 ```
 
 ```{r, clean data}
@@ -37,7 +38,7 @@ df.og <- read_csv("./Cognitive_Performance_Comprehensive.csv")
 #| message: FALSE
 
 # Standardize ID
-df <- df.og |>
+df <- df |>
   mutate(ID = case_when(BirdID == "BlueBlack" ~ 1,
                    BirdID == "BlueBrown" ~ 2,
                    BirdID == "BlueGreen" ~ 3,
@@ -99,7 +100,6 @@ rl.df <- df |>
 ```{r, SPLM, num errors PER TRIAL}
 
 #### Table ####
-
 # Build statistics df
 stat.trial.error.splm.df <- splm.df |>
   group_by(TrialNumTot) |>
@@ -128,10 +128,8 @@ stat.trial.error.splm.gt <- stat.trial.error.splm.df |>
     table.border.top.width = px(0),
     column_labels.vlines.style = "none",
     row.striping.include_table_body = FALSE)
-stat.trial.error.splm.gt
 
 #### Visual ####
-
 # Calculate average # errors per trial
 splm.avgerror.pertrial <- splm.df |>
   group_by(TrialNumTot) |>
@@ -148,7 +146,8 @@ splm.trial.error.gg <- ggplot() +
   geom_point(
     data = splm.df,
     aes(x = TrialNumTot, y = NumError, colour = "Observations"),
-    position = "jitter") +
+    position = position_jitter(
+      width = 0.2, height = 0)) +
   geom_smooth(
     data = splm.df,
     aes(x = TrialNumTot, y = NumError, colour = "Trendline"),
@@ -165,7 +164,11 @@ splm.trial.error.gg <- ggplot() +
       "Observations" = "deepskyblue3",
       "Trendline" = "darkslategrey")) +
     theme(
-    legend.position = c(0.9, 0.8)) +
+    legend.position = c(0.9, 0.8),
+    legend.background = element_rect(
+      colour = "lightgrey",
+      linewidth = 0.5),
+    plot.caption = element_text(hjust = 0.5)) +
   ## Axes/scales
   coord_cartesian(
     xlim = c(0.5, 15.5),
@@ -180,8 +183,8 @@ splm.trial.error.gg <- ggplot() +
     x = "Trial number",
     y = "Number of errors",
     caption = "CAPTION HERE") +
-  ggtitle("Number of Errors per Trial",
-          subtitle = "on the Spatial Learning & Memory Task") +
+  ggtitle("Number of errors per trial",
+          subtitle = "on the spatial learning & memory task") +
   ## Annotations
   geom_vline(
     xintercept = c(5.5, 10.5),
@@ -196,8 +199,229 @@ splm.trial.error.gg <- ggplot() +
   annotate("text", x = 3, y = 29.5, label = "Day 1") +
   annotate("text", x = 8, y = 29.5, label = "Day 2") +
   annotate("text", x = 13, y = 29.5, label = "Day 3")
-splm.trial.error.gg
+```
+
+```{r, SPLM, num seconds PER TRIAL}
+
+#### Table ####
+# Build statistics df
+stat.trial.sec.splm.df <-splm.df |>
+  group_by(TrialNumTot) |>
+  summarize(
+    N = n(), 
+    Mean = mean(NumSec), 
+    Min = min(NumSec),
+    Median = median(NumSec),
+    Max = max(NumSec),
+    Range = Max - Min,
+    SD = sd(NumSec),
+    SE = SD / sqrt(N)) |>
+  rename(`Trial #` = TrialNumTot) |>
+  mutate(across(c(Mean, SD, SE), ~ round(.x, 2))) |>
+  select(-N, -Min, -Max)
+
+# Build gt
+stat.trial.sec.splm.gt <- stat.trial.sec.splm.df |>
+  gt() |>
+  tab_header(title = "Descriptive statistics for time (minutes) per trial",
+             subtitle = "for spatial learning & memory") |>
+  tab_caption(caption = "CAPTION HERE") |>
+  tab_options(
+    table_body.vlines.style = "none",
+    table_body.hlines.style = "none",
+    table.border.top.width = px(0),
+    column_labels.vlines.style = "none",
+    row.striping.include_table_body = FALSE)
+
+#### Visual ####
+# Calculate average # sec per trial
+splm.avgsec.pertrial <- splm.df |>
+  group_by(TrialNumTot) |>
+  summarize(MeanTime = mean(NumSec)) |>
+  mutate(log_meantime = log(MeanTime))
+
+# Build ggplot 1
+splm.trial.sec.gg <- ggplot() +
+  ## Geoms
+  geom_col(
+    data = splm.avgsec.pertrial,
+    aes(x = TrialNumTot, y = MeanTime, colour = "Average"),
+    fill = "darkseagreen",
+    linewidth = 0.5) +
+  geom_point(
+    data = splm.df,
+    aes(x = TrialNumTot, y = NumSec, colour = "Observations"),
+    position = position_jitter(
+      width = 0.2, height = 0)) +
+  geom_smooth(
+    data = splm.df,
+    aes(x = TrialNumTot, y = NumSec, colour = "Trendline"),
+    method = "loess",
+    linewidth = 0.5,
+    se = FALSE,
+    fullrange = TRUE) + 
+  ## Theme & legend
+    theme_classic() +
+  scale_colour_manual(
+    name = NULL, 
+    values = c(
+      "Average" = "darkseagreen",
+      "Observations" = "deeppink2",
+      "Trendline" = "darkslategrey")) +
+    theme(
+    legend.position = c(0.9, 0.8),
+      legend.background = element_rect(
+      colour = "lightgrey",
+      linewidth = 0.5),
+      plot.caption = element_text(hjust = 0.5)) +
+  ## Axes/scales
+  coord_cartesian(
+    xlim = c(0.5, 15.5),
+    ylim = c(0, 720),
+    expand = FALSE) + 
+  scale_x_continuous(
+    breaks = 1:15) +
+  scale_y_continuous(
+    breaks = c(0, 60, 120, 180, 240, 300, 360, 420, 480, 540, 600, 660, 720),
+    labels = c("0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12")) +
+  ## Axes
+  labs(
+    x = "Trial number",
+    y = "Time (minutes)",
+    caption = "CAPTION HERE") +
+  ggtitle("Time to reward per trial (minutes)",
+          subtitle = "on the spatial learning & memory task") +
+  ## Annotations
+  geom_vline(
+    xintercept = c(5.5, 10.5),
+    colour = "grey") +
+  annotate("segment",
+           x = c(1.5, 2.5, 3.5, 4.5, 6.5, 7.5, 8.5, 9.5, 11.5, 12.5, 13.5, 14.5), 
+           xend = c(1.5, 2.5, 3.5, 4.5, 6.5, 7.5, 8.5, 9.5, 11.5, 12.5, 13.5, 14.5),
+           y = c(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0), 
+           yend = c(420, 300, 180, 120, 120, 120, 120, 120, 60, 60, 60, 60),
+           colour = "lightgrey",
+           linetype = "dashed") +  
+  annotate("text", x = 3, y = 710, label = "Day 1") +
+  annotate("text", x = 8, y = 710, label = "Day 2") +
+  annotate("text", x = 13, y = 710, label = "Day 3")
+
+# Transform average # sec per trial
+splm.df <- splm.df |>
+  mutate(log_sec = log(NumSec))
+
+# Build ggplot 2
+splm.trial.sec.LOG.gg <- ggplot() +
+  ## Geoms
+  geom_col(
+    data = splm.avgsec.pertrial,
+    aes(x = TrialNumTot, y = log_meantime, colour = "Average"),
+    fill = "darkseagreen",
+    linewidth = 0.5) +
+  geom_point(
+    data = splm.df,
+    aes(x = TrialNumTot, y = log_sec, colour = "Observations"),
+    position = position_jitter(
+      width = 0.2, height = 0)) +
+  geom_smooth(
+    data = splm.df,
+    aes(x = TrialNumTot, y = log_sec, colour = "Trendline"),
+    method = "loess",
+    linewidth = 0.5,
+    se = FALSE,
+    fullrange = TRUE) + 
+  ## Theme & legend
+    theme_classic() +
+  scale_colour_manual(
+    name = NULL, 
+    values = c(
+      "Average" = "darkseagreen",
+      "Observations" = "deeppink2",
+      "Trendline" = "darkslategrey")) +
+    theme(
+    legend.position = c(0.9, 0.8),
+      legend.background = element_rect(
+      colour = "lightgrey",
+      linewidth = 0.5),
+        plot.caption = element_text(hjust = 0.5)) +
+  ## Axes/scales
+  coord_cartesian(
+    xlim = c(0.5, 15.5),
+    ylim = c(0, 7),
+    expand = FALSE) + 
+  scale_x_continuous(
+    breaks = 1:15) +
+  scale_y_continuous(
+    breaks = seq(0, 7, by = 1)) +
+  ## Axes
+  labs(
+    x = "Trial number",
+    y = "Log(time) (seconds)",
+    caption = "CAPTION HERE") +
+  ggtitle("Log(time) to reward per trial (seconds)",
+          subtitle = "on the spatial learning & memory task") +
+  ## Annotations
+  geom_vline(
+    xintercept = c(5.5, 10.5),
+    colour = "grey") +
+  annotate("segment",
+           x = c(1.5, 2.5, 3.5, 4.5, 6.5, 7.5, 8.5, 9.5, 11.5, 12.5, 13.5, 14.5), 
+           xend = c(1.5, 2.5, 3.5, 4.5, 6.5, 7.5, 8.5, 9.5, 11.5, 12.5, 13.5, 14.5),
+           y = c(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0), 
+           yend = c(6, 6, 6, 6, 5, 5, 5, 5, 4.5, 4.5, 4.5, 4.5),
+           colour = "lightgrey",
+           linetype = "dashed") +  
+  annotate("text", x = 3, y = 6.9, label = "Day 1") +
+  annotate("text", x = 8, y = 6.9, label = "Day 2") +
+  annotate("text", x = 13, y = 6.9, label = "Day 3")
+
+# Format combined plot
+splm.trial.sec.comb.gg <- splm.trial.sec.gg + splm.trial.sec.LOG.gg
 ```
 
 
+DISPLAY
 
+```{r}
+stat.trial.error.splm.gt
+```
+
+```{r}
+stat.trial.sec.splm.gt
+```
+
+```{r}
+#| fig-width: 7
+#| fig-height: 6
+splm.trial.error.gg
+```
+
+```{r}
+#| fig-width: 14
+#| fig-height: 6
+splm.trial.sec.comb.gg
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
